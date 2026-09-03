@@ -6415,9 +6415,15 @@ Namespace UnitOperations
                     End Select
                 Next
 
+                'Relative errors, against each compound's own feed - but no
+                'smaller a denominator than 1e-6 of the total feed. Without the
+                'floor a trace (methane at 3e-6 mole fraction in a hot naphtha
+                'feed to a stripper) is held to the loop tolerance in RELATIVE
+                'terms, i.e. to nanomoles, and the whole column is reported as
+                'failing a balance that is closed to every meaningful digit.
+                Dim totalfeed As Double = compound_feeds.Values.Sum()
                 For Each c In comps
-                    'relative errors
-                    compound_balances(c) = compound_balances(c) / (compound_feeds(c) + 1.0E-20)
+                    compound_balances(c) = compound_balances(c) / Math.Max(compound_feeds(c), 1.0E-6 * totalfeed + 1.0E-20)
                 Next
 
                 Dim mintol = tol.MinY_NonZero() * 10

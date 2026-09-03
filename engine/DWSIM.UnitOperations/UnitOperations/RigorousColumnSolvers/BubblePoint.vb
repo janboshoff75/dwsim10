@@ -1207,8 +1207,17 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                     sumx(i) = 0
                     For j = 0 To nc - 1
                         lc(i)(j) = xt(j)(i)
+                        'A negative liquid rate out of the tridiagonal is an
+                        'artefact of an ill-conditioned balance - typically a
+                        'non-condensable (K in the thousands) on a stage that
+                        'holds none of it. Mirroring it into a positive rate
+                        'manufactures that component in the stage liquid, and
+                        'the bubble point of a liquid holding 0.5% methane at
+                        '1 atm is outside the column: Flash_PV fails, the
+                        'temperature reverts, and the loop stalls. Zero is
+                        'the value the balance is trying to express.
                         If lc(i)(j) < 0.0# Then
-                            lc(i)(j) = -lc(i)(j)
+                            lc(i)(j) = 0.0#
                         End If
                         sumx(i) += lc(i)(j)
                     Next
