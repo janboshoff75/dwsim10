@@ -857,7 +857,7 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
             Dim doparallel As Boolean = Settings.EnableParallelProcessing
 
             Dim ic As Integer
-            Dim t_error, t_error_ant, vf_error, xcerror(ns) As Double
+            Dim t_error, t_error_ant, vf_error, x_error, xcerror(ns) As Double
             Dim Tj(ns), Tj_ant(ns), dTj(ns) As Double
             Dim Fj(ns), Lj(ns), Vj(ns), Vj_ant(ns), dVj(ns), xc(ns)(), xc0(ns)(), fcj(ns)(), yc(ns)(), lc(ns)(), vc(ns)(), zc(ns)(), K(ns)(), Kant(ns)() As Double
             Dim Hfj(ns), Hv(ns), Hl(ns) As Double
@@ -1215,13 +1215,29 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                 Next
 
                 If ic > 0 Then
+                    x_error = 0.0
                     For i = 0 To ns
                         xcerror(i) = 0.0
                         For j = 0 To nc - 1
                             xc0(i)(j) = xc(i)(j)
                             If sumx(i) > 0.0# Then
                                 xc(i)(j) = lc(i)(j) / sumx(i)
+                                'the largest move any stage composition made this
+                                'iteration. The temperature and vapour-flow errors alone
+                                'let the loop exit on a state whose COMPOSITIONS are in a
+                                'limit cycle: on a wide-boiling stripper the component
+                                'balance settles, destabilises, and the solve ends
+                                'carrying several times the methane it is fed. A maximum
+                                'rather than a sum so the measure does not grow with the
+                                'compound count, and an absolute rather than a relative
+                                'change so a trace in a limit cycle - worth nothing to
+                                'the column - cannot hold the loop open.
+                                If Math.Abs(xc(i)(j) - xc0(i)(j)) > x_error Then
+                                    x_error = Math.Abs(xc(i)(j) - xc0(i)(j))
+                                End If
                             Else
+                                'a stage with no liquid: xc is not normalised here and
+                                'the change in it does not mean anything.
                                 xc(i)(j) = yc(i)(j) / K(i)(j)
                             End If
                         Next
@@ -1784,7 +1800,7 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                 reporter?.AppendLine()
                 reporter?.AppendLine()
 
-            Loop Until (t_error + vf_error) < tolerance * ns / 100 And ic > 1
+            Loop Until (t_error + vf_error) < tolerance * ns / 100 And x_error < tolerance And ic > 1
 
             'check mass balance
             For i = 0 To ns
