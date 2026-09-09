@@ -103,5 +103,49 @@ namespace DWSIM.Engine.SmokeTests
             Assert.That(overhead.Phases[0].Properties.temperature, Is.EqualTo(347.6).Within(2.0));
             Assert.That(bottoms.Phases[0].Properties.temperature, Is.EqualTo(395.7).Within(2.0));
         }
+
+        // The same 12-stage reboiled stripper on a WIDE-BOILING feed: the whole
+        // Anderson-Schulz-Flory chain, C1 traces through C29 wax, at 100 degF and
+        // 72 psig, so the K values on a stage liquid span about 1e12 rather than 1e6.
+        //
+        // The component tridiagonal is ill-conditioned for the most volatile
+        // component at that spread and returns small NEGATIVE liquid rates.
+        // BubblePoint.vb mirrors them to positive values, which MANUFACTURES the
+        // component in the stage liquid, and the balance check reports a NEGATIVE
+        // relative error - the column puts out several times the methane it is fed.
+        [Test]
+        public void TheWideBoilingStripperDoesNotManufactureMethane()
+        {
+            var flowsheet = Load("WideBoilingStripper.dwxmz");
+
+            var errors = flowsheet.SolveFlowsheet2();
+
+            Assert.That(errors, Is.Empty,
+                        "the solver reported: " + string.Join("; ", errors.Select(e => e.Message)));
+
+            var streams = flowsheet.SimulationObjects.Values.OfType<MaterialStream>().ToList();
+            var feed = streams.Single(s => s.GraphicObject.Tag == "FEED");
+            var overhead = streams.Single(s => s.GraphicObject.Tag == "OVERHEAD");
+            var bottoms = streams.Single(s => s.GraphicObject.Tag == "BOTTOMS");
+
+            foreach (var name in new[] { "Methane", "Hydrogen", "Ethane", "N-heptane", "N-nonacosane" })
+            {
+                double inFlow = feed.Phases[0].Compounds[name].MolarFlow.GetValueOrDefault();
+                double outFlow = overhead.Phases[0].Compounds[name].MolarFlow.GetValueOrDefault()
+                               + bottoms.Phases[0].Compounds[name].MolarFlow.GetValueOrDefault();
+
+                Assert.That(outFlow, Is.EqualTo(inFlow).Within(0.1).Percent, name + " does not balance");
+            }
+
+            // The estimates saved in the file are a converged solution of this same
+            // column from an independent stage-by-stage adiabatic flash cascade on the
+            // same property package: 8.011 lbmol/hr overhead and 11.990 bottoms against
+            // the 12.0 spec, methane balanced to 1e-5. The column has to land on it.
+            const double lbmolhr = 7.93664;
+            Assert.That(overhead.Phases[0].Properties.molarflow.GetValueOrDefault() * lbmolhr,
+                        Is.EqualTo(8.072).Within(2.0).Percent, "overhead rate");
+            Assert.That(bottoms.Phases[0].Properties.molarflow.GetValueOrDefault() * lbmolhr,
+                        Is.EqualTo(11.928).Within(2.0).Percent, "bottoms rate");
+        }
     }
 }
