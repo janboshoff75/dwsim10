@@ -154,6 +154,9 @@ namespace DWSIM.UI.Desktop.Editors
             panel.CreateAndAddTextBoxRow(nf, "Maximum Number of Iterations", column.MaxIterations,
                 (tb, e) => { if (UnitOpEditorRows.TryParse(tb.Text, out var v)) column.MaxIterations = (int)v; });
 
+            panel.CreateAndAddTextBoxRow(nf, "Temperature Relaxation (Bubble-Point Solvers)", column.TemperatureRelaxation,
+                (tb, e) => { if (UnitOpEditorRows.TryParse(tb.Text, out var v) && v > 0 && v <= 1) column.TemperatureRelaxation = v; });
+
             // the Windows form writes one box into both tolerances
             panel.CreateAndAddTextBoxRow(nf, "Convergence Tolerance", column.ExternalLoopTolerance,
                 (tb, e) =>

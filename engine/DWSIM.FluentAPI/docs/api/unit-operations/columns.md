@@ -36,6 +36,7 @@ stage-by-stage rigorous solver.
 | `WithReboilerSpec(specType, value, units, compound = "")` | E.g. `"Product Molar Flow Rate"`. |
 | `WithTopPressure(p)` | Top-stage pressure. |
 | `WithColumnPressureDrop(dp)` | Total drop across the column. |
+| `WithTemperatureRelaxation(f)` | Under-relaxation of the bubble-point solvers' stage temperature update, 0 to 1 (default 0.5). |
 
 ```csharp
 fs.AddDistillationColumn("T-101")
