@@ -1794,6 +1794,10 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                         nsolv.EnableDamping = True
                         nsolv.ExpandFactor = 1.6
                         nsolv.MaximumDelta = 0.2
+                        ' scale the step as a whole rather than clip it variable by variable: a column carries
+                        ' trace components whose corrections are many times their size, and clipping those one
+                        ' by one leaves a direction along which nothing decreases
+                        nsolv.ScaleWholeStep = True
                         nsolv.MaxIterations = maxits
                         nsolv.Tolerance = tol.MinY_NonZero()
                         ' With an exact, cheap analytical Jacobian there is no reason to use the Broyden
