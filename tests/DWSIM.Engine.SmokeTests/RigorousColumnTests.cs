@@ -147,5 +147,46 @@ namespace DWSIM.Engine.SmokeTests
             Assert.That(bottoms.Phases[0].Properties.molarflow.GetValueOrDefault() * lbmolhr,
                         Is.EqualTo(11.928).Within(2.0).Percent, "bottoms rate");
         }
+        // The same file solved with Naphtali-Sandholm. A column with no condenser is set up as
+        // full reflux with a reflux ratio of zero, and on any full-reflux column the simultaneous
+        // solver used to fail at its very first residual evaluation with "Error evaluating error
+        // functions": its condenser-specification residual was Log(L0 / LSS0 / rr) with LSS0
+        // forced to zero for full reflux and rr zero as well. With the specification written
+        // against the vapour product, the condenser stage carrying no liquid as in the
+        // bubble-point solver, and its temperature set by the dew point of its vapour, the
+        // solver starts from the Wang-Henke solution its warm-up provides and converges in a
+        // couple of dozen Newton iterations onto the same answer.
+        [Test]
+        public void NaphtaliSandholmSolvesTheNaphthaStripper()
+        {
+            var flowsheet = Load("TraceMethaneStripper.dwxmz");
+
+            var column = flowsheet.SimulationObjects.Values.OfType<DistillationColumn>().Single();
+            column.SolvingMethodName = "Napthali-Sandholm";
+
+            var errors = flowsheet.SolveFlowsheet2();
+
+            Assert.That(errors, Is.Empty,
+                        "the solver reported: " + string.Join("; ", errors.Select(e => e.Message)));
+
+            var streams = flowsheet.SimulationObjects.Values.OfType<MaterialStream>().ToList();
+            var feed = streams.Single(s => s.GraphicObject.Tag == "FEED");
+            var overhead = streams.Single(s => s.GraphicObject.Tag == "OVERHEAD");
+            var bottoms = streams.Single(s => s.GraphicObject.Tag == "BOTTOMS");
+
+            foreach (var name in new[] { "Methane", "Hydrogen", "Carbon dioxide", "Ethane", "Propane", "N-heptane" })
+            {
+                double inFlow = feed.Phases[0].Compounds[name].MolarFlow.GetValueOrDefault();
+                double outFlow = overhead.Phases[0].Compounds[name].MolarFlow.GetValueOrDefault()
+                               + bottoms.Phases[0].Compounds[name].MolarFlow.GetValueOrDefault();
+
+                Assert.That(outFlow, Is.EqualTo(inFlow).Within(0.1).Percent, name + " does not balance");
+            }
+
+            // the same solution the bubble-point solver finds: overhead at 166 degF, bottoms at 252.6 degF
+            Assert.That(overhead.Phases[0].Properties.temperature, Is.EqualTo(347.6).Within(2.0));
+            Assert.That(bottoms.Phases[0].Properties.temperature, Is.EqualTo(395.7).Within(2.0));
+        }
+
     }
 }
