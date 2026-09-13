@@ -518,6 +518,22 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
 
             'handle user specs
 
+            'At full reflux the stage-0 liquid is zero by the equilibrium rows below, and a
+            'reflux-ratio, product-rate or feed-recovery condenser specification has nothing
+            'left to fix (the vapour product follows from the reboiler specification, as in the
+            'bubble-point solver). The specification row then carries the one equation left
+            'for the stage temperature: with no feed on the stage the vapour passes through
+            'and leaves at the top tray's temperature, written as that difference so its
+            'sensitivity is where it belongs; with a feed, the energy balance with no duty.
+            Dim ebres0 As Double = 0.0
+            If _condtype = Column.condtype.Full_Reflux Then
+                If F(0) > 0.0 Then
+                    ebres0 = (-Hr(0) + (Hl(0) * (1 + Sl(0)) * sumlkj(0) + Hv(0) * (1 + Sv(0)) * sumvkj(0) - Hv(1) * sumvkj(1) - HF(0) * F(0))) / 1000.0
+                Else
+                    ebres0 = (Tj(0) - Tj(1)) / _maxT
+                End If
+            End If
+
             Select Case _specs("C").SType
                 Case ColumnSpec.SpecType.Component_Fraction
                     If _condtype <> Column.condtype.Full_Reflux Then
@@ -570,20 +586,40 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                 Case ColumnSpec.SpecType.Heat_Duty
                     Q(0) = spval1
                 Case ColumnSpec.SpecType.Product_Mass_Flow_Rate
-                    spfval1 = Log(LSSj(0) / (spval1 / _pp.AUX_MMM(xc(0)) * 1000))
-                    _specs("C").CalculatedValue = LSSj(0) / _pp.AUX_MMM(xc(0)) / 1000
+                    If _condtype <> Column.condtype.Full_Reflux Then
+                        spfval1 = Log(LSSj(0) / (spval1 / _pp.AUX_MMM(xc(0)) * 1000))
+                        _specs("C").CalculatedValue = LSSj(0) / _pp.AUX_MMM(xc(0)) / 1000
+                    Else
+                        spfval1 = ebres0
+                        _specs("C").CalculatedValue = Vj(0) / _pp.AUX_MMM(yc(0)) / 1000
+                    End If
                 Case ColumnSpec.SpecType.Product_Molar_Flow_Rate
-                    spfval1 = Log(LSSj(0) / spval1)
-                    _specs("C").CalculatedValue = LSSj(0)
+                    If _condtype <> Column.condtype.Full_Reflux Then
+                        spfval1 = Log(LSSj(0) / spval1)
+                        _specs("C").CalculatedValue = LSSj(0)
+                    Else
+                        spfval1 = ebres0
+                        _specs("C").CalculatedValue = Vj(0)
+                    End If
                 Case ColumnSpec.SpecType.Stream_Ratio
-                    spfval1 = Log(Lj(0) / LSSj(0) / spval1)
-                    _specs("C").CalculatedValue = Lj(0) / LSSj(0)
+                    If _condtype <> Column.condtype.Full_Reflux Then
+                        spfval1 = Log(Lj(0) / LSSj(0) / spval1)
+                        _specs("C").CalculatedValue = Lj(0) / LSSj(0)
+                    Else
+                        spfval1 = ebres0
+                        _specs("C").CalculatedValue = 0.0
+                    End If
                 Case ColumnSpec.SpecType.Temperature
                     spfval1 = Log((Tj(0)) / spval1)
                     _specs("C").CalculatedValue = Tj(0)
                 Case ColumnSpec.SpecType.Feed_Recovery
-                    spfval1 = Log(LSSj(0) / (spval1 / 100 * F.SumY))
-                    _specs("C").CalculatedValue = LSSj(0) / F.SumY * 100.0
+                    If _condtype <> Column.condtype.Full_Reflux Then
+                        spfval1 = Log(LSSj(0) / (spval1 / 100 * F.SumY))
+                        _specs("C").CalculatedValue = LSSj(0) / F.SumY * 100.0
+                    Else
+                        spfval1 = ebres0
+                        _specs("C").CalculatedValue = Vj(0) / F.SumY * 100.0
+                    End If
             End Select
 
             Select Case _specs("R").SType
@@ -629,6 +665,21 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                     _specs("R").CalculatedValue = Lj(ns) / F.SumY * 100.0
             End Select
 
+            'l * V / L in the equilibrium equations, finite on a stage that carries no liquid (the
+            'condenser stage of a column with no condenser): there the normalised liquid composition
+            'is the estimate made from the vapour above
+            Dim lvr(ns)() As Double
+            For i = 0 To ns
+                Array.Resize(lvr(i), nc)
+                For j = 0 To nc - 1
+                    If sumlkj(i) > 0.0 Then
+                        lvr(i)(j) = lc(i)(j) * sumvkj(i) / sumlkj(i)
+                    Else
+                        lvr(i)(j) = xc(i)(j) * sumvkj(i)
+                    End If
+                Next
+            Next
+
             For i = 0 To ns
                 For j = 0 To nc - 1
                     M_ant(i, j) = M(i, j)
@@ -638,10 +689,11 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                         If _coltype <> ColType.AbsorptionColumn Then
                             If _condtype = Column.condtype.Full_Reflux Then
                                 M(i, j) = lc(i)(j) * (1 + Sl(i)) + vc(i)(j) * (1 + Sv(i)) - vc(i + 1)(j) - fc(i)(j)
-                                E(i, j) = eff(i) * Kval(i)(j) * lc(i)(j) * sumvkj(i) / sumlkj(i) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
+                                'no liquid leaves the stage (the bubble-point solver's model of full reflux)
+                                E(i, j) = lc(i)(j) / _maxlc
                             ElseIf _condtype = condtype.Partial_Condenser Then
                                 M(i, j) = lc(i)(j) * (1 + Sl(i)) + vc(i)(j) * (1 + Sv(i)) - vc(i + 1)(j) - fc(i)(j)
-                                E(i, j) = eff(i) * Kval(i)(j) * lc(i)(j) * sumvkj(i) / sumlkj(i) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
+                                E(i, j) = eff(i) * Kval(i)(j) * lvr(i)(j) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
                             Else
                                 'total condenser
                                 Dim sum1 As Double = 0
@@ -657,14 +709,14 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                             End If
                         Else
                             M(i, j) = lc(i)(j) * (1 + Sl(i)) + vc(i)(j) * (1 + Sv(i)) - vc(i + 1)(j) - fc(i)(j)
-                            E(i, j) = eff(i) * Kval(i)(j) * lc(i)(j) * sumvkj(i) / sumlkj(i) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
+                            E(i, j) = eff(i) * Kval(i)(j) * lvr(i)(j) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
                         End If
                     ElseIf i = ns Then
                         M(i, j) = lc(i)(j) * (1 + Sl(i)) + vc(i)(j) * (1 + Sv(i)) - lc(i - 1)(j) - fc(i)(j)
-                        E(i, j) = eff(i) * Kval(i)(j) * lc(i)(j) * sumvkj(i) / sumlkj(i) - vc(i)(j)
+                        E(i, j) = eff(i) * Kval(i)(j) * lvr(i)(j) - vc(i)(j)
                     Else
                         M(i, j) = lc(i)(j) * (1 + Sl(i)) + vc(i)(j) * (1 + Sv(i)) - lc(i - 1)(j) - vc(i + 1)(j) - fc(i)(j)
-                        E(i, j) = eff(i) * Kval(i)(j) * lc(i)(j) * sumvkj(i) / sumlkj(i) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
+                        E(i, j) = eff(i) * Kval(i)(j) * lvr(i)(j) - vc(i)(j) + (1 - eff(i)) * vc(i + 1)(j) * sumvkj(i) / sumvkj(i + 1)
                     End If
                 Next
                 If i = 0 Then
@@ -677,14 +729,14 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                 H(i) /= 1000.0
                 Select Case coltype
                     Case Column.ColType.DistillationColumn
-                        H(0) = spfval1 / spval1
-                        H(ns) = spfval2 / spval2
+                        H(0) = If(spval1 <> 0.0 AndAlso _condtype <> Column.condtype.Full_Reflux, spfval1 / spval1, spfval1)
+                        H(ns) = If(spval2 <> 0.0, spfval2 / spval2, spfval2)
                     Case Column.ColType.AbsorptionColumn
                         'do nothing
                     Case Column.ColType.ReboiledAbsorber
-                        H(ns) = spfval2 / spval2
+                        H(ns) = If(spval2 <> 0.0, spfval2 / spval2, spfval2)
                     Case Column.ColType.RefluxedAbsorber
-                        H(0) = spfval1 / spval1
+                        H(0) = If(spval1 <> 0.0, spfval1 / spval1, spfval1)
                 End Select
             Next
 
