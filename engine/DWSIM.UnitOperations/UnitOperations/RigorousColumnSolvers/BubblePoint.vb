@@ -744,6 +744,12 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                                  specs As Dictionary(Of String, SepOps.ColumnSpec),
                                  IdealK As Boolean, IdealH As Boolean,
                                  flashalgs As List(Of FlashAlgorithm)) As Object
+            ' A bounded call (stopatitnumber > 0) is another solver's warm-up, not a solve: one attempt at the
+            ' column's own step, and its failure is the caller's to handle. Through the ladder, the caller
+            ' would be handed whatever the last rung produced instead of its own estimates.
+            If stopatitnumber > 0 Then
+                Return Solve_Internal(rc, nc, ns, maxits, tolerance, F, V, Q, L, VSS, LSS, Kval, x, y, z, fc, HF, T, P, condt, stopatitnumber, eff, coltype, pp, specs, IdealK, IdealH, 0, flashalgs)
+            End If
             Do
                 Try
                     Return Solve_Internal(rc, nc, ns, maxits, tolerance, F, V, Q, L, VSS, LSS, Kval, x, y, z, fc, HF, T, P, condt, stopatitnumber, eff, coltype, pp, specs, IdealK, IdealH, 0, flashalgs)
