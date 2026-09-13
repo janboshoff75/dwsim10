@@ -584,7 +584,8 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                         _specs("C").CalculatedValue = Vj(0) * yc(0)(spci1) / sumc
                     End If
                 Case ColumnSpec.SpecType.Heat_Duty
-                    Q(0) = spval1
+                    ' the rows read (out - in) - Q: a condenser duty, given as heat removed, enters them negative
+                    Q(0) = -spval1
                 Case ColumnSpec.SpecType.Product_Mass_Flow_Rate
                     If _condtype <> Column.condtype.Full_Reflux Then
                         spfval1 = Log(LSSj(0) / (spval1 / _pp.AUX_MMM(xc(0)) * 1000))
@@ -2017,6 +2018,11 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
 
             If dc.CreateSolverConvergengeReport Then dc.ColumnSolverConvergenceReport = reporter.ToString()
 
+            ' specified duties back in the column's convention (Q = in - out: condenser positive,
+            ' reboiler negative), which is what the bubble-point solver returns and the energy
+            ' streams are written from
+            If _specs("C").SType = ColumnSpec.SpecType.Heat_Duty Then Q(0) = spval1
+            If _specs("R").SType = ColumnSpec.SpecType.Heat_Duty Then Q(ns) = -spval2
             Return New Object() {Tj, Vj, Lj, VSSj, LSSj, yc, xc, K, Q, ec, il_err, ic, el_err}
 
         End Function
