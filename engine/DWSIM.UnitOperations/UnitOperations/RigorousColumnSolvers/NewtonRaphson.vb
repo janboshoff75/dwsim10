@@ -727,16 +727,21 @@ Namespace UnitOperations.Auxiliary.SepOps.SolvingMethods
                     H(i) = -Hr(i) + (Hl(i) * (1 + Sl(i)) * sumlkj(i) + Hv(i) * (1 + Sv(i)) * sumvkj(i) - Hl(i - 1) * sumlkj(i - 1) - Hv(i + 1) * sumvkj(i + 1) - HF(i) * F(i) - Q(i))
                 End If
                 H(i) /= 1000.0
+                ' the specification residuals replace the end stages' energy balances - except for a
+                ' Heat_Duty specification, whose duty is known and already in the balance just formed:
+                ' that balance IS the equation, and the specification residual would be a zero row
+                Dim cdutyspec As Boolean = _specs("C").SType = ColumnSpec.SpecType.Heat_Duty
+                Dim rdutyspec As Boolean = _specs("R").SType = ColumnSpec.SpecType.Heat_Duty
                 Select Case coltype
                     Case Column.ColType.DistillationColumn
-                        H(0) = If(spval1 <> 0.0 AndAlso _condtype <> Column.condtype.Full_Reflux, spfval1 / spval1, spfval1)
-                        H(ns) = If(spval2 <> 0.0, spfval2 / spval2, spfval2)
+                        If Not cdutyspec Then H(0) = If(spval1 <> 0.0 AndAlso _condtype <> Column.condtype.Full_Reflux, spfval1 / spval1, spfval1)
+                        If Not rdutyspec Then H(ns) = If(spval2 <> 0.0, spfval2 / spval2, spfval2)
                     Case Column.ColType.AbsorptionColumn
                         'do nothing
                     Case Column.ColType.ReboiledAbsorber
-                        H(ns) = If(spval2 <> 0.0, spfval2 / spval2, spfval2)
+                        If Not rdutyspec Then H(ns) = If(spval2 <> 0.0, spfval2 / spval2, spfval2)
                     Case Column.ColType.RefluxedAbsorber
-                        H(0) = If(spval1 <> 0.0, spfval1 / spval1, spfval1)
+                        If Not cdutyspec Then H(0) = If(spval1 <> 0.0, spfval1 / spval1, spfval1)
                 End Select
             Next
 
