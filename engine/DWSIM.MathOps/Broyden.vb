@@ -62,11 +62,15 @@
                 '
                 DENOM = (1.0# - THETA) * PTP + THETA * PTHY
                 '
-                For I = 0 To N ' DO 50 I=1,N
-                    For J = 0 To N ' DO 50 J=1,N
-                        H(I, J) = H(I, J) - THETA * XB(I) * FB(J) / DENOM
-                    Next J
-50:             Next I
+                ' a call on which X did not move (or F did not change) carries no secant information, and
+                ' the update would divide by zero and fill H with NaN: keep H as it is for this step
+                If DENOM <> 0.0# Then
+                    For I = 0 To N ' DO 50 I=1,N
+                        For J = 0 To N ' DO 50 J=1,N
+                            H(I, J) = H(I, J) - THETA * XB(I) * FB(J) / DENOM
+                        Next J
+50:                 Next I
+                End If
                 '
             End If
             For I = 0 To N '  DO 70 I=1,N
