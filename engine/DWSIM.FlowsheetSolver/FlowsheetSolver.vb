@@ -1685,8 +1685,11 @@ Public Delegate Sub CustomEvent2(ByVal objinfo As CalculationArgs)
                                                                           rec.Values(kvp.Key) = recvars(i) + 0.7 * recdvars(i)
                                                                           i += 1
                                                                       Next
+                                                                      ' only the Broyden recycles: a substitution recycle has already copied its inlet
+                                                                      ' across, and its Values still hold the outlet from before that copy, so writing
+                                                                      ' them back froze its tear stream at the values it started from
+                                                                      rec.SetOutletStreamProperties()
                                                                   End If
-                                                                  rec.SetOutletStreamProperties()
                                                               Next
 
                                                           End If
